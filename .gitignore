@@ -1,0 +1,12 @@
+# Python / Node virtual environments & dependencies
+venv/
+.venv/
+node_modules/
+
+# Secrets & Environment variables
+.env
+
+# Cache & Logs
+__pycache__/
+*.log
+.DS_Store

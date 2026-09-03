@@ -1,6 +1,8 @@
 # Flip 7 Discord Bot
 
-A Discord app for playing the press-your-luck card game **Flip 7** with your friends! This is not an official app.
+A Discord app for playing the press-your-luck card game **Flip 7** with your friends!
+
+> **Disclaimer:** This is an unofficial, fan-made application and is not affiliated with, endorsed by, or associated with Flip 7, USAopoly, Inc., or its partners. All game mechanics, names, and card designs belong to their respective copyright holders.
 
 ---
 

@@ -470,7 +470,7 @@ class Flip7RoundEndView(View):
         await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
         await game_view.start_turn_cycle()
 
-    @discord.ui.button(label="Play Again 🔄", style=discord.ButtonStyle.success, custom_id="btn_play_again")
+    @discord.ui.button(label="Play Again 🔄", style=discord.ButtonStyle.success, row=1, custom_id="btn_play_again")
     async def play_again_button(self, interaction: discord.Interaction, button: Button):
         for p in self.engine.players.values():
             p.total_score = 0
@@ -489,7 +489,7 @@ class Flip7RoundEndView(View):
         await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
         await game_view.start_turn_cycle()
 
-    @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, custom_id="btn_end_game_cancel")
+    @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, row=1, custom_id="btn_end_game_cancel")
     async def cancel_button(self, interaction: discord.Interaction, button: Button):
         if interaction.user.id != self.session.host.id:
             await interaction.response.send_message("Only the host can close the finished game session.", ephemeral=True)
@@ -601,7 +601,7 @@ class Flip7LobbyView(View):
         self.engine.remove_player(bot_keys[-1])
         await interaction.response.edit_message(embed=self.create_lobby_embed(), view=self)
 
-    @discord.ui.button(label="Start Game ▶️", style=discord.ButtonStyle.success, custom_id="btn_lobby_start")
+    @discord.ui.button(label="Start Game ▶️", style=discord.ButtonStyle.success, row=1, custom_id="btn_lobby_start")
     async def start_button(self, interaction: discord.Interaction, button: Button):
         if interaction.user.id != self.host.id:
             await interaction.response.send_message("Only the host can start the game.", ephemeral=True)
@@ -621,7 +621,7 @@ class Flip7LobbyView(View):
         await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
         await game_view.start_turn_cycle()
 
-    @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, custom_id="btn_lobby_cancel")
+    @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, row=1, custom_id="btn_lobby_cancel")
     async def cancel_button(self, interaction: discord.Interaction, button: Button):
         if interaction.user.id != self.session.host.id:
             await interaction.response.send_message("Only the host can cancel the game.", ephemeral=True)

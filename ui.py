@@ -193,9 +193,9 @@ class Flip7GameView(View):
         curr = self.engine.get_current_player()
         if not self.engine.is_round_over() and curr:
             turn_mention = f"🤖 **{curr.name}**" if curr.is_bot else f"<@{curr.id}>"
-            embed.description = f"**Current Turn:** {turn_mention}\n\n{self.action_log}"
+            embed.description = f"### 🎯 Current Turn: {turn_mention}\n\n>>> {self.action_log}"
         else:
-            embed.description = f"**Round Ended!**\n\n{self.action_log}"
+            embed.description = f"### 🏁 Round Ended!\n\n>>> {self.action_log}"
 
         for p in self.engine.players.values():
             status_badge = {
@@ -207,10 +207,20 @@ class Flip7GameView(View):
 
             cards_str = " ".join(c.format_card() for c in p.hand) if p.hand else "*No cards*"
             shield_badge = " ❤️" if p.has_second_chance else ""
+
+            # Field Name: Clean bolding (no ### here because field names don't parse headers)
+            field_name = f"👤 **{p.name}**{shield_badge}  —  {status_badge}"
             
+            # Field Value: Uses ### headers, bolding, blockquotes, and spacing
+            field_value = (
+                f"**Banked Total:** `{p.total_score} pts`  |  **Round Score:** `{p.get_round_score()} pts`\n"
+                f"> **Hand:** {cards_str}\n"
+                f"\u200b"  # Vertical spacer between player sections
+            )
+
             embed.add_field(
-                name=f"{p.name}{shield_badge} — {status_badge} (Banked: {p.total_score} pts)",
-                value=f"**Round Score:** `{p.get_round_score()} pts`\n**Hand:** {cards_str}",
+                name=field_name,
+                value=field_value,
                 inline=False
             )
 
@@ -390,20 +400,35 @@ class Flip7GameView(View):
         await self.start_turn_cycle()
 
     async def finish_round(self):
+        """Called when a round ends. Posts a NEW channel message with the recap and Next Round controls."""
         self._cancel_timer()
         self._clear_selects()
+        
+        # 1. Disable buttons on the finished game board message
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(embed=self.create_game_embed(), view=self)
+            except discord.HTTPException:
+                pass
+
+        # 2. Calculate scores & create summary view
         round_scores = self.engine.tally_round_scores()
         round_view = Flip7RoundEndView(self.session)
         self.session.current_view = round_view
         embed = round_view.create_summary_embed(round_scores)
         
-        if self.message:
-            await self.message.edit(embed=embed, view=round_view)
-            round_view.message = self.message
+        # 3. Post a fresh message to the channel containing the summary recap & Next Round button
+        channel = self.message.channel if self.message else None
+        if channel:
+            new_msg = await channel.send(embed=embed, view=round_view)
+            round_view.message = new_msg
+            self.session.message = new_msg
 
 
 class Flip7RoundEndView(View):
-    """Displays round recap, leaderboards, and next round / play again buttons."""
+    """Displays round recap, leaderboards, and next round / play again buttons in a new message."""
     def __init__(self, session: GameSession):
         super().__init__(timeout=180)
         self.session = session
@@ -423,27 +448,32 @@ class Flip7RoundEndView(View):
         if is_match_over and winner:
             embed = discord.Embed(
                 title=f"🏆 Match Finished! {winner.name} Wins!",
-                description=f"🎉 **{winner.name}** reached the goal with **{winner.total_score} points**!",
+                description=f"# 🎉 **{winner.name}** reached the goal with **{winner.total_score} points**!",
                 color=discord.Color.gold()
             )
         else:
             embed = discord.Embed(
                 title=f"🏁 Round {self.engine.round_number} Finished!",
+                description="Click **Next Round ⏭️** below when ready to continue!",
                 color=discord.Color.green()
             )
 
         if self.engine.flip7_achieved_by:
-            embed.description = (embed.description or "") + f"\n🌟 **{self.engine.flip7_achieved_by.name} achieved FLIP 7! (+15 Bonus)**"
+            embed.description = (embed.description or "") + f"\n\n🌟 **{self.engine.flip7_achieved_by.name} achieved FLIP 7! (+15 Bonus)**"
 
         round_lines = []
         for p in self.engine.players.values():
             pts = round_scores.get(p.id, 0)
             if pts == 0:
-                round_lines.append(f"• **{p.name}**: 💥 0 pts")
+                round_lines.append(f"💥 **{p.name}**: `0 pts`")
             else:
-                round_lines.append(f"• **{p.name}**: `+{pts} pts`")
+                round_lines.append(f"✨ **{p.name}**: `+{pts} pts`")
 
-        embed.add_field(name="Round Results", value="\n".join(round_lines), inline=False)
+        embed.add_field(
+            name="📊 Round Results", 
+            value="\n".join(round_lines) + "\n\u200b", 
+            inline=False
+        )
 
         medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"]
         board_lines = []
@@ -451,7 +481,11 @@ class Flip7RoundEndView(View):
             medal = medals[i] if i < len(medals) else "•"
             board_lines.append(f"{medal} **{p.name}**: `{p.total_score} pts` / {self.engine.target_score} pts")
 
-        embed.add_field(name="Current Standings", value="\n".join(board_lines), inline=False)
+        embed.add_field(
+            name="🏆 Current Standings", 
+            value="\n".join(board_lines), 
+            inline=False
+        )
         return embed
 
     @discord.ui.button(label="Next Round ⏭️", style=discord.ButtonStyle.primary, custom_id="btn_next_round")
@@ -460,18 +494,24 @@ class Flip7RoundEndView(View):
             await interaction.response.send_message("The game is already finished! Click 'Play Again' to restart.", ephemeral=True)
             return
 
+        # 1. Start the new round engine state
         self.engine.start_round()
         game_view = Flip7GameView(self.session)
         self.session.current_view = game_view
-        game_view.message = self.message
+        game_view.action_log = f"🎮 Round {self.engine.round_number} started! Click **Hit** to draw your first card."
 
-        game_view.action_log = "🎮 Round started! Click **Hit** to draw your first card."
-
+        # 2. Edit the round summary message directly into the new round's game view
         await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
+        
+        # 3. Save message reference and start turn cycle
+        game_view.message = interaction.message
+        self.session.message = interaction.message
+
         await game_view.start_turn_cycle()
 
     @discord.ui.button(label="Play Again 🔄", style=discord.ButtonStyle.success, row=1, custom_id="btn_play_again")
     async def play_again_button(self, interaction: discord.Interaction, button: Button):
+        # 1. Reset scores and engine state
         for p in self.engine.players.values():
             p.total_score = 0
             p.reset_for_new_round()
@@ -479,14 +519,18 @@ class Flip7RoundEndView(View):
         self.engine.deck = []
         self.engine.discard_pile = []
 
+        # 2. Start initial round of new match
         self.engine.start_round()
         game_view = Flip7GameView(self.session)
         self.session.current_view = game_view
-        game_view.message = self.message
-
         game_view.action_log = "🔄 New match started! Click **Hit** to draw your first card."
 
+        # 3. Edit the existing summary message into the fresh game view
         await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
+
+        game_view.message = interaction.message
+        self.session.message = interaction.message
+
         await game_view.start_turn_cycle()
 
     @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, row=1, custom_id="btn_end_game_cancel")

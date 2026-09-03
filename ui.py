@@ -554,13 +554,8 @@ class Flip7RoundEndView(LayoutView):
         if interaction.user.id != self.session.host.id:
             await interaction.response.send_message("Only the host can close the finished game session.", ephemeral=True)
             return
-
-        winner = self.engine.get_winner()
-        winner_text = f" **{winner.name}** won with **{winner.total_score} pts**." if winner else ""
         
-        self.container.clear_items()
-        self.container.add_item(TextDisplay(f"# 🏁 Game Session Closed\nThe match has concluded.{winner_text} Thanks for playing!"))
-        await interaction.response.edit_message(view=self)
+        await interaction.response.send_message("🏁 The match has concluded. Thanks for playing!")
         self.session.stop()
 
 # --- LAYOUTVIEWS USING COMPONENTS V2 ---

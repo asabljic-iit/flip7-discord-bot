@@ -127,7 +127,7 @@ async def flip7_rules(interaction: discord.Interaction):
         value=(
             "• `[🛡️ Second Chance]` Shields you from your next duplicate bust! Max 1 shield held at a time. Extra copies must be passed.\n"
             "• `[❄️ Freeze]` Forces a player (yourself or an opponent) to immediately stay and bank their current points.\n"
-            "• `[⚡ Flip Three]` Forces the target player to immediately flip the next 3 cards from the deck!\n"
+            "• `[⚡️ Flip Three]` Forces the target player to immediately flip the next 3 cards from the deck!\n"
             "• `[➕ +2 to +10]` Flat point bonus added to your round score.\n"
             "• `[✖️ x2]` Doubles the sum of your number cards!"
         ),

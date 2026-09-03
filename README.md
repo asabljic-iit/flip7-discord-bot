@@ -13,7 +13,7 @@ A Discord app for playing the press-your-luck card game **Flip 7** with your fri
   - **Action Cards**:
     - `[❤️ Second Chance]` (3x): Shields against your next duplicate number bust. Max 1 held; excess copies are passed to active opponents.
     - `[❄️ Freeze]` (3x): Choose a player (opponent or self) to immediately stay and bank their current points.
-    - `[⚡ Flip Three]` (3x): Forces a target player to flip the next 3 cards from the deck in sequence.
+    - `[⚡️ Flip Three]` (3x): Forces a target player to flip the next 3 cards from the deck in sequence.
   - **Score Modifiers**:
     - Flat Bonuses: `[+2]`, `[+4]`, `[+6]`, `[+8]`, `[+10]`.
     - Multiplier: `[x2]` (doubles the sum of number cards).

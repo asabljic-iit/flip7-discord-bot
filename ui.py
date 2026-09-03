@@ -78,7 +78,7 @@ class FlipThreeTargetSelect(Select):
                 options.append(discord.SelectOption(label=label, value=str(p.id), description=desc[:100]))
 
         super().__init__(
-            placeholder="⚡ Choose who flips 3 cards...",
+            placeholder="⚡️ Choose who flips 3 cards...",
             min_values=1,
             max_values=1,
             options=options if options else [discord.SelectOption(label="No valid targets", value="none")]
@@ -98,11 +98,11 @@ class FlipThreeTargetSelect(Select):
         
         target_name = "themselves" if target_id == self.actor.id else f"**{target_p.name}**"
         if target_p.status == "busted":
-            self.game_view.action_log = f"⚡ **{self.actor.name}** forced {target_name} to Flip 3: {cards_str} 💥 **BUSTED!**"
+            self.game_view.action_log = f"⚡️ **{self.actor.name}** forced {target_name} to Flip 3: {cards_str} 💥 **BUSTED!**"
         elif target_p.has_flip7_bonus():
-            self.game_view.action_log = f"⚡ **{self.actor.name}** forced {target_name} to Flip 3: {cards_str} 🌟 **FLIP 7!**"
+            self.game_view.action_log = f"⚡️ **{self.actor.name}** forced {target_name} to Flip 3: {cards_str} 🌟 **FLIP 7!**"
         else:
-            self.game_view.action_log = f"⚡ **{self.actor.name}** forced {target_name} to Flip 3: {cards_str}"
+            self.game_view.action_log = f"⚡️ **{self.actor.name}** forced {target_name} to Flip 3: {cards_str}"
 
         await self.game_view.after_action(interaction)
 
@@ -270,7 +270,7 @@ class Flip7GameView(View):
                 target_p = self.engine.players[target_id]
                 results = self.engine.resolve_flip_three(bot_player.id, target_id)
                 cards_str = " ".join(c.format_card() for c, _ in results)
-                self.action_log = f"⚡ **{bot_player.name}** forced **{target_p.name}** to Flip 3: {cards_str}"
+                self.action_log = f"⚡️ **{bot_player.name}** forced **{target_p.name}** to Flip 3: {cards_str}"
                 
                 # If target is a bot with queued pending actions, resolve them now
                 while target_p.is_bot and target_p.pending_action and target_p.status == "playing":
@@ -306,7 +306,7 @@ class Flip7GameView(View):
             target_p = self.engine.players[target_id]
             results = self.engine.resolve_flip_three(bot_player.id, target_id)
             cards_str = " ".join(c.format_card() for c, _ in results)
-            self.action_log += f"\n⚡ **{bot_player.name}** resolved Flip 3 on **{target_p.name}**: {cards_str}"
+            self.action_log += f"\n⚡️ **{bot_player.name}** resolved Flip 3 on **{target_p.name}**: {cards_str}"
         elif bot_player.pending_action == "pass_second_chance":
             eligible = [p for p in self.engine.players.values() if p.id != bot_player.id and p.status == "playing" and not p.has_second_chance]
             if eligible:
@@ -350,7 +350,7 @@ class Flip7GameView(View):
             self.action_log = f"❄️ **{interaction.user.name}** drew Freeze! Pick a player to freeze:"
         elif result == "action_flip_three":
             self.add_item(FlipThreeTargetSelect(self, curr))
-            self.action_log = f"⚡ **{interaction.user.name}** drew Flip Three! Pick a player to flip 3 cards:"
+            self.action_log = f"⚡️ **{interaction.user.name}** drew Flip Three! Pick a player to flip 3 cards:"
         elif result == "action_second_chance_pass":
             targets = extra.get("targets", []) if extra else []
             self.add_item(PassSecondChanceSelect(self, curr, targets))

@@ -33,7 +33,7 @@ class Card:
         if self.name == "Freeze":
             return "`[❄️ Freeze]`"
         if self.name == "Flip Three":
-            return "`[⚡ Flip 3]`"
+            return "`[⚡️ Flip 3]`"
         return f"`[{self.name}]`"
 
     def __repr__(self) -> str:

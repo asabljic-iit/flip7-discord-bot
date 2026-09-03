@@ -67,8 +67,8 @@ async def start_flip7(interaction: discord.Interaction, target_score: int = 200)
     new_session.current_view = lobby
     active_sessions[channel_id] = new_session
 
-    embed = lobby.create_lobby_embed()
-    await interaction.response.send_message(embed=embed, view=lobby)
+    # Send the LayoutView directly
+    await interaction.response.send_message(view=lobby)
     new_session.message = await interaction.original_response()
     lobby.message = new_session.message
 
@@ -96,12 +96,7 @@ async def stop_flip7(interaction: discord.Interaction):
     session.stop()
     del active_sessions[channel_id]
 
-    stop_embed = discord.Embed(
-        title="🛑 Game Cancelled",
-        description=f"The active Flip 7 game was stopped by <@{interaction.user.id}>.",
-        color=discord.Color.red()
-    )
-    await interaction.response.send_message(embed=stop_embed)
+    await interaction.response.send_message(f"🛑 The active Flip 7 game was stopped by <@{interaction.user.id}>.")
 
 
 @bot.tree.command(name="flip7_rules", description="Learn how to play Flip 7 (rules, cards, and scoring).")

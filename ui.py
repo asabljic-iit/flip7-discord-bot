@@ -1,6 +1,6 @@
 import asyncio
 import discord
-from discord.ui import View, Button, Select
+from discord.ui import LayoutView, Container, TextDisplay, Separator, Button, Select, ActionRow
 from typing import Optional, List, Dict
 from game import Flip7Engine, Player
 
@@ -15,7 +15,7 @@ class GameSession:
         self.target_score = target_score
         self.engine = Flip7Engine(target_score=target_score)
         self.engine.add_player(host.id, host.display_name, is_bot=False)
-        self.current_view: Optional[View] = None
+        self.current_view: Optional[LayoutView] = None
         self.message: Optional[discord.Message] = None
         self.is_active: bool = True
 
@@ -24,6 +24,8 @@ class GameSession:
         if self.current_view and not self.current_view.is_finished():
             self.current_view.stop()
 
+
+# --- ACTION CARD SELECT DROPDOWNS ---
 
 class FreezeTargetSelect(Select):
     """Dropdown to choose target for Freeze action card."""
@@ -144,8 +146,10 @@ class PassSecondChanceSelect(Select):
         await self.game_view.after_action(interaction)
 
 
-class Flip7GameView(View):
-    """Active game view with Hit, Stay, and action selectors."""
+
+class Flip7GameView(LayoutView):
+    """Active game view using LayoutView Containers and TextDisplays."""
+
     def __init__(self, session: GameSession):
         super().__init__(timeout=None)
         self.session = session
@@ -153,6 +157,16 @@ class Flip7GameView(View):
         self.message: Optional[discord.Message] = None
         self.action_log: str = "🎮 Round started! Click **Hit** to draw your first card."
         self.turn_timer_task: Optional[asyncio.Task] = None
+        self.container = Container()
+        self.add_item(self.container)
+
+        # Instantiate game controls
+        self.hit_btn = Button(label="Hit 🃏", style=discord.ButtonStyle.success, custom_id="btn_hit")
+        self.stay_btn = Button(label="Stay 🛑", style=discord.ButtonStyle.secondary, custom_id="btn_stay")
+
+        self.hit_btn.callback = self.hit_button_callback
+        self.stay_btn.callback = self.stay_button_callback
+
         self.update_buttons()
 
     def update_buttons(self):
@@ -165,37 +179,41 @@ class Flip7GameView(View):
             or curr.is_bot 
             or curr.pending_action is not None
         )
-        self.hit_button.disabled = cannot_act
+        self.hit_btn.disabled = cannot_act
         
-        # Rule Check: Player cannot Stay on initial turn if holding 0 cards in hand
         cannot_stay = cannot_act or (curr is not None and len(curr.hand) == 0)
-        self.stay_button.disabled = cannot_stay
+        self.stay_btn.disabled = cannot_stay
 
     def _clear_selects(self):
-        for item in list(self.children):
-            if isinstance(item, Select):
-                self.remove_item(item)
+        for item in list(self.container.children):
+            if isinstance(item, ActionRow):
+                if any(isinstance(child, Select) for child in item.children):
+                    self.container.children.remove(item)
 
     def attach_pending_select_if_any(self, player: Player):
+        select_item = None
         if player.pending_action == "freeze":
-            self.add_item(FreezeTargetSelect(self, player))
+            select_item = FreezeTargetSelect(self, player)
         elif player.pending_action == "flip_three":
-            self.add_item(FlipThreeTargetSelect(self, player))
+            select_item = FlipThreeTargetSelect(self, player)
         elif player.pending_action == "pass_second_chance":
-            self.add_item(PassSecondChanceSelect(self, player))
+            select_item = PassSecondChanceSelect(self, player)
 
-    def create_game_embed(self) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"🃏 Flip 7 — Round {self.engine.round_number}",
-            color=discord.Color.blue()
-        )
+        if select_item:
+            self.container.add_item(ActionRow(select_item))
+
+    def build_game_layout(self):
+        self.container.clear_items()
 
         curr = self.engine.get_current_player()
         if not self.engine.is_round_over() and curr:
             turn_mention = f"🤖 **{curr.name}**" if curr.is_bot else f"<@{curr.id}>"
-            embed.description = f"### 🎯 Current Turn: {turn_mention}\n\n>>> {self.action_log}"
+            header_text = f"# 🃏 Flip 7 — Round {self.engine.round_number}\n**Current Turn:** {turn_mention}\n> {self.action_log}"
         else:
-            embed.description = f"### 🏁 Round Ended!\n\n>>> {self.action_log}"
+            header_text = f"# 🃏 Flip 7 — Round {self.engine.round_number}\n**Round Ended!**\n> {self.action_log}"
+
+        self.container.add_item(TextDisplay(header_text))
+        self.container.add_item(Separator())
 
         for p in self.engine.players.values():
             status_badge = {
@@ -205,27 +223,33 @@ class Flip7GameView(View):
                 "frozen": "❄️ Frozen"
             }.get(p.status, p.status)
 
-            cards_str = " ".join(c.format_card() for c in p.hand) if p.hand else "*No cards*"
             shield_badge = " ❤️" if p.has_second_chance else ""
 
-            # Field Name: Clean bolding (no ### here because field names don't parse headers)
-            field_name = f"👤 **{p.name}**{shield_badge}  —  {status_badge}"
-            
-            # Field Value: Uses ### headers, bolding, blockquotes, and spacing
-            field_value = (
+            # Separate hand into number cards and modifier/action cards
+            numbers = [c for c in p.hand if c.is_number]
+            others = [c for c in p.hand if not c.is_number]
+
+            numbers_str = " ".join(c.format_card() for c in numbers) if numbers else "*None*"
+            others_str = " ".join(c.format_card() for c in others) if others else "*None*"
+
+            player_text = (
+                f"👤 **{p.name}{shield_badge}  —  {status_badge}**\n"
                 f"**Banked Total:** `{p.total_score} pts`  |  **Round Score:** `{p.get_round_score()} pts`\n"
-                f"> **Hand:** {cards_str}\n"
-                f"\u200b"  # Vertical spacer between player sections
+                f"## **Hand:** {numbers_str}\n"
+                f"**{others_str}**"
             )
+            self.container.add_item(TextDisplay(player_text))
+            self.container.add_item(Separator())
 
-            embed.add_field(
-                name=field_name,
-                value=field_value,
-                inline=False
-            )
+        footer_text = f"-# **Deck: {len(self.engine.deck)} cards | Discard: {len(self.engine.discard_pile)} cards | Goal: {self.engine.target_score} pts**"
+        self.container.add_item(TextDisplay(footer_text))
 
-        embed.set_footer(text=f"Deck: {len(self.engine.deck)} cards | Discard: {len(self.engine.discard_pile)} | Goal: {self.engine.target_score} pts")
-        return embed
+        # Re-attach action row controls
+        self.container.add_item(ActionRow(self.hit_btn, self.stay_btn))
+
+        # Attach pending action dropdowns inside container if required
+        if curr and not curr.is_bot and curr.pending_action:
+            self.attach_pending_select_if_any(curr)
 
     async def start_turn_cycle(self):
         self._cancel_timer()
@@ -237,74 +261,88 @@ class Flip7GameView(View):
         if not curr:
             return
 
-        # Check if current human player has remaining actions in their queue
-        if not curr.is_bot and curr.pending_action:
-            self._clear_selects()
-            self.attach_pending_select_if_any(curr)
-
         self.update_buttons()
-        if self.message:
-            await self.message.edit(embed=self.create_game_embed(), view=self)
+        self.build_game_layout()
 
+        if self.message:
+            await self.message.edit(view=self)
+
+        # If it's a bot's turn, launch a single task loop to process all consecutive bot turns
         if curr.is_bot:
-            asyncio.create_task(self._process_bot_turn(curr))
+            asyncio.create_task(self._process_bot_turn())
 
     def _cancel_timer(self):
         if self.turn_timer_task and not self.turn_timer_task.done():
             self.turn_timer_task.cancel()
             self.turn_timer_task = None
 
-    async def _process_bot_turn(self, bot_player: Player):
-        await asyncio.sleep(1.5)
-        if self.engine.is_round_over():
-            await self.finish_round()
-            return
+    async def _process_bot_turn(self):
+        """Iterative loop that processes active bot turns sequentially without recursive tasks."""
+        while not self.engine.is_round_over():
+            curr = self.engine.get_current_player()
+            if not curr or not curr.is_bot or curr.status != "playing":
+                break
 
-        # Drain pending actions for bot loop
-        while bot_player.pending_action and bot_player.status == "playing":
-            await self._resolve_bot_pending_action(bot_player)
+            await asyncio.sleep(1.2)
 
-        if self.engine.is_round_over():
-            await self.finish_round()
-            return
+            # 1. Resolve any pending actions for this bot
+            while curr.pending_action and curr.status == "playing":
+                await self._resolve_bot_pending_action(curr)
 
-        decision = self.engine.get_bot_decision(bot_player)
-        if decision == "hit":
-            card, result, extra = self.engine.hit(bot_player.id)
-            if result == "action_freeze":
-                target_id = self.engine.choose_bot_freeze_target(bot_player)
-                target_p, _ = self.engine.resolve_freeze(bot_player.id, target_id)
-                self.action_log = f"❄️ **{bot_player.name}** drew Freeze and froze **{target_p.name}**!"
-            elif result == "action_flip_three":
-                target_id = self.engine.choose_bot_flip_three_target(bot_player)
-                target_p = self.engine.players[target_id]
-                results = self.engine.resolve_flip_three(bot_player.id, target_id)
-                cards_str = " ".join(c.format_card() for c, _ in results)
-                self.action_log = f"⚡️ **{bot_player.name}** forced **{target_p.name}** to Flip 3: {cards_str}"
-                
-                # If target is a bot with queued pending actions, resolve them now
-                while target_p.is_bot and target_p.pending_action and target_p.status == "playing":
-                    await self._resolve_bot_pending_action(target_p)
-            elif result == "action_second_chance_pass":
-                recipients = extra.get("targets", []) if extra else []
-                if recipients:
-                    rec_p = self.engine.resolve_pass_second_chance(bot_player.id, recipients[0])
-                    self.action_log = f"❤️ **{bot_player.name}** passed a **Second Chance** shield to **{rec_p.name}**!"
-            elif result == "action_second_chance_kept":
-                self.action_log = f"❤️ **{bot_player.name}** drew a **Second Chance** shield!"
-            elif result == "saved_by_second_chance":
-                self.action_log = f"❤️ **{bot_player.name}** drew duplicate {card.format_card()}, saved by **Second Chance**!"
-            elif result == "busted":
-                self.action_log = f"💥 **{bot_player.name}** drew {card.format_card()} and **BUSTED**!"
-            elif result == "flip7":
-                self.action_log = f"🌟 **{bot_player.name}** drew {card.format_card()} and hit **FLIP 7**!"
+            if self.engine.is_round_over() or curr.status != "playing":
+                break
+
+            # 2. Make hit / stay decision
+            decision = self.engine.get_bot_decision(curr)
+            if decision == "hit":
+                card, result, extra = self.engine.hit(curr.id)
+                if result == "action_freeze":
+                    target_id = self.engine.choose_bot_freeze_target(curr)
+                    target_p, _ = self.engine.resolve_freeze(curr.id, target_id)
+                    self.action_log = f"❄️ **{curr.name}** drew Freeze and froze **{target_p.name}**!"
+                elif result == "action_flip_three":
+                    target_id = self.engine.choose_bot_flip_three_target(curr)
+                    target_p = self.engine.players[target_id]
+                    results = self.engine.resolve_flip_three(curr.id, target_id)
+                    cards_str = " ".join(c.format_card() for c, _ in results)
+                    self.action_log = f"⚡️ **{curr.name}** forced **{target_p.name}** to Flip 3: {cards_str}"
+                    
+                    # If target is a bot with pending actions from Flip 3, resolve them immediately
+                    while target_p.is_bot and target_p.pending_action and target_p.status == "playing":
+                        await self._resolve_bot_pending_action(target_p)
+                elif result == "action_second_chance_pass":
+                    recipients = extra.get("targets", []) if extra else []
+                    if recipients:
+                        rec_p = self.engine.resolve_pass_second_chance(curr.id, recipients[0])
+                        self.action_log = f"❤️ **{curr.name}** passed a **Second Chance** shield to **{rec_p.name}**!"
+                elif result == "action_second_chance_kept":
+                    self.action_log = f"❤️ **{curr.name}** drew a **Second Chance** shield!"
+                elif result == "saved_by_second_chance":
+                    self.action_log = f"❤️ **{curr.name}** drew duplicate {card.format_card()}, saved by **Second Chance**!"
+                elif result == "busted":
+                    self.action_log = f"💥 **{curr.name}** drew {card.format_card()} and **BUSTED**!"
+                elif result == "flip7":
+                    self.action_log = f"🌟 **{curr.name}** drew {card.format_card()} and hit **FLIP 7**!"
+                else:
+                    self.action_log = f"🃏 **{curr.name}** drew {card.format_card()}."
             else:
-                self.action_log = f"🃏 **{bot_player.name}** drew {card.format_card()}."
-        else:
-            self.engine.stay(bot_player.id)
-            self.action_log = f"🛑 **{bot_player.name}** chose to Stay."
+                self.engine.stay(curr.id)
+                self.action_log = f"🛑 **{curr.name}** chose to Stay."
 
-        await self.start_turn_cycle()
+            # Update layout after each bot action
+            self.update_buttons()
+            self.build_game_layout()
+            if self.message:
+                await self.message.edit(view=self)
+
+        # Check if the round ended or hand off control to human player
+        if self.engine.is_round_over():
+            await self.finish_round()
+        else:
+            self.update_buttons()
+            self.build_game_layout()
+            if self.message:
+                await self.message.edit(view=self)
 
     async def _resolve_bot_pending_action(self, bot_player: Player):
         if bot_player.pending_action == "freeze":
@@ -327,19 +365,12 @@ class Flip7GameView(View):
 
     async def after_action(self, interaction: discord.Interaction):
         self._clear_selects()
-
-        # Check if the active human player has queued actions left to resolve
-        curr = self.engine.get_current_player()
-        if curr and not curr.is_bot and curr.pending_action:
-            self.attach_pending_select_if_any(curr)
-
         self.update_buttons()
-        embed = self.create_game_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        self.build_game_layout()
+        await interaction.response.edit_message(view=self)
         await self.start_turn_cycle()
 
-    @discord.ui.button(label="Hit 🃏", style=discord.ButtonStyle.success, custom_id="btn_hit")
-    async def hit_button(self, interaction: discord.Interaction, button: Button):
+    async def hit_button_callback(self, interaction: discord.Interaction):
         curr = self.engine.get_current_player()
         if not curr or interaction.user.id != curr.id:
             await interaction.response.send_message("It's not your turn!", ephemeral=True)
@@ -351,19 +382,13 @@ class Flip7GameView(View):
 
         self._cancel_timer()
 
-        # 1. Process engine state
         card, result, extra = self.engine.hit(interaction.user.id)
 
-        # 2. Update action log and attach dropdowns if action card was drawn
         if result == "action_freeze":
-            self.add_item(FreezeTargetSelect(self, curr))
             self.action_log = f"❄️ **{interaction.user.name}** drew Freeze! Pick a player to freeze:"
         elif result == "action_flip_three":
-            self.add_item(FlipThreeTargetSelect(self, curr))
             self.action_log = f"⚡️ **{interaction.user.name}** drew Flip Three! Pick a player to flip 3 cards:"
         elif result == "action_second_chance_pass":
-            targets = extra.get("targets", []) if extra else []
-            self.add_item(PassSecondChanceSelect(self, curr, targets))
             self.action_log = f"❤️ **{interaction.user.name}** already has a shield! Choose a player to give it to:"
         elif result == "action_second_chance_kept":
             self.action_log = f"❤️ **{interaction.user.name}** drew a **Second Chance** shield!"
@@ -376,16 +401,17 @@ class Flip7GameView(View):
         else:
             self.action_log = f"🃏 **{interaction.user.name}** drew {card.format_card()}."
 
-        # 3. Update buttons and edit message ONCE
         self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_game_embed(), view=self)
+        self.build_game_layout()
 
-        # 4. If no pending action required, start the next turn cycle asynchronously
-        if not curr.pending_action:
-            asyncio.create_task(self.start_turn_cycle())
+        # If turn ends or advances, start_turn_cycle will edit the view
+        if curr.pending_action:
+            await interaction.response.edit_message(view=self)
+        else:
+            await interaction.response.defer()
+            await self.start_turn_cycle()
 
-    @discord.ui.button(label="Stay 🛑", style=discord.ButtonStyle.secondary, custom_id="btn_stay")
-    async def stay_button(self, interaction: discord.Interaction, button: Button):
+    async def stay_button_callback(self, interaction: discord.Interaction):
         curr = self.engine.get_current_player()
         if not curr or interaction.user.id != curr.id:
             await interaction.response.send_message("It's not your turn!", ephemeral=True)
@@ -396,84 +422,81 @@ class Flip7GameView(View):
         self.action_log = f"🛑 **{interaction.user.name}** locked in their hand."
         
         self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_game_embed(), view=self)
+        self.build_game_layout()
+        await interaction.response.edit_message(view=self)
         await self.start_turn_cycle()
 
     async def finish_round(self):
-        """Called when a round ends. Posts a NEW channel message with the recap and Next Round controls."""
+        """Called when a round ends. Posts a recap with Next Round controls."""
         self._cancel_timer()
         self._clear_selects()
-        
-        # 1. Disable buttons on the finished game board message
-        for child in self.children:
-            child.disabled = True
+
         if self.message:
             try:
-                await self.message.edit(embed=self.create_game_embed(), view=self)
-            except discord.HTTPException:
+                self.build_game_layout()
+                await self.message.edit(view=self)
+            except Exception:
                 pass
 
-        # 2. Calculate scores & create summary view
         round_scores = self.engine.tally_round_scores()
-        round_view = Flip7RoundEndView(self.session)
+        round_view = Flip7RoundEndView(self.session, round_scores)
         self.session.current_view = round_view
-        embed = round_view.create_summary_embed(round_scores)
         
-        # 3. Post a fresh message to the channel containing the summary recap & Next Round button
         channel = self.message.channel if self.message else None
         if channel:
-            new_msg = await channel.send(embed=embed, view=round_view)
+            new_msg = await channel.send(view=round_view)
             round_view.message = new_msg
             self.session.message = new_msg
 
 
-class Flip7RoundEndView(View):
-    """Displays round recap, leaderboards, and next round / play again buttons in a new message."""
-    def __init__(self, session: GameSession):
+class Flip7RoundEndView(LayoutView):
+    """Displays round recap and standings using LayoutView Containers."""
+
+    def __init__(self, session: GameSession, round_scores: Dict[int, int]):
         super().__init__(timeout=180)
         self.session = session
         self.engine = session.engine
+        self.round_scores = round_scores
         self.message: Optional[discord.Message] = None
+        self.container = Container()
+        self.add_item(self.container)
 
-        if self.engine.is_game_over():
-            self.remove_item(self.next_round_button)
-        else:
-            self.remove_item(self.play_again_button)
-            self.remove_item(self.cancel_button)
+        self.btn_next = Button(label="Next Round ⏭️", style=discord.ButtonStyle.primary, custom_id="btn_next_round")
+        self.btn_play_again = Button(label="Play Again 🔄", style=discord.ButtonStyle.success, custom_id="btn_play_again")
+        self.btn_cancel = Button(label="Cancel ❌", style=discord.ButtonStyle.danger, custom_id="btn_end_game_cancel")
 
-    def create_summary_embed(self, round_scores: Dict[int, int]) -> discord.Embed:
+        self.btn_next.callback = self.next_round_button_callback
+        self.btn_play_again.callback = self.play_again_button_callback
+        self.btn_cancel.callback = self.cancel_button_callback
+
+        self.build_summary_layout()
+
+    def build_summary_layout(self):
+        self.container.clear_items()
         is_match_over = self.engine.is_game_over()
         winner = self.engine.get_winner()
 
         if is_match_over and winner:
-            embed = discord.Embed(
-                title=f"🏆 Match Finished! {winner.name} Wins!",
-                description=f"# 🎉 **{winner.name}** reached the goal with **{winner.total_score} points**!",
-                color=discord.Color.gold()
-            )
+            header_text = f"# 🏆 Match Finished! {winner.name} Wins!\n🎉 **{winner.name}** reached the goal with **{winner.total_score} points**!"
         else:
-            embed = discord.Embed(
-                title=f"🏁 Round {self.engine.round_number} Finished!",
-                description="Click **Next Round ⏭️** below when ready to continue!",
-                color=discord.Color.green()
-            )
+            header_text = f"# 🏁 Round {self.engine.round_number} Finished!\nClick **Next Round ⏭️** below when ready to continue!"
 
         if self.engine.flip7_achieved_by:
-            embed.description = (embed.description or "") + f"\n\n🌟 **{self.engine.flip7_achieved_by.name} achieved FLIP 7! (+15 Bonus)**"
+            header_text += f"\n\n🌟 **{self.engine.flip7_achieved_by.name} achieved FLIP 7! (+15 Bonus)**"
+
+        self.container.add_item(TextDisplay(header_text))
+        self.container.add_item(Separator())
 
         round_lines = []
         for p in self.engine.players.values():
-            pts = round_scores.get(p.id, 0)
+            pts = self.round_scores.get(p.id, 0)
             if pts == 0:
                 round_lines.append(f"💥 **{p.name}**: `0 pts`")
             else:
                 round_lines.append(f"✨ **{p.name}**: `+{pts} pts`")
 
-        embed.add_field(
-            name="📊 Round Results", 
-            value="\n".join(round_lines) + "\n\u200b", 
-            inline=False
-        )
+        self.container.add_item(TextDisplay(f"## 📊 Round Results\n" + "\n".join(round_lines)))
+        self.container.add_item(Separator())
 
         medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"]
         board_lines = []
@@ -481,37 +504,32 @@ class Flip7RoundEndView(View):
             medal = medals[i] if i < len(medals) else "•"
             board_lines.append(f"{medal} **{p.name}**: `{p.total_score} pts` / {self.engine.target_score} pts")
 
-        embed.add_field(
-            name="🏆 Current Standings", 
-            value="\n".join(board_lines), 
-            inline=False
-        )
-        return embed
+        self.container.add_item(TextDisplay(f"## 🏆 Current Standings\n" + "\n".join(board_lines)))
 
-    @discord.ui.button(label="Next Round ⏭️", style=discord.ButtonStyle.primary, custom_id="btn_next_round")
-    async def next_round_button(self, interaction: discord.Interaction, button: Button):
+        if not is_match_over:
+            self.container.add_item(ActionRow(self.btn_next))
+        else:
+            self.container.add_item(ActionRow(self.btn_play_again, self.btn_cancel))
+
+    async def next_round_button_callback(self, interaction: discord.Interaction):
         if self.engine.is_game_over():
             await interaction.response.send_message("The game is already finished! Click 'Play Again' to restart.", ephemeral=True)
             return
 
-        # 1. Start the new round engine state
         self.engine.start_round()
         game_view = Flip7GameView(self.session)
         self.session.current_view = game_view
         game_view.action_log = f"🎮 Round {self.engine.round_number} started! Click **Hit** to draw your first card."
 
-        # 2. Edit the round summary message directly into the new round's game view
-        await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
+        game_view.build_game_layout()
+        await interaction.response.edit_message(view=game_view)
         
-        # 3. Save message reference and start turn cycle
         game_view.message = interaction.message
         self.session.message = interaction.message
 
         await game_view.start_turn_cycle()
 
-    @discord.ui.button(label="Play Again 🔄", style=discord.ButtonStyle.success, row=1, custom_id="btn_play_again")
-    async def play_again_button(self, interaction: discord.Interaction, button: Button):
-        # 1. Reset scores and engine state
+    async def play_again_button_callback(self, interaction: discord.Interaction):
         for p in self.engine.players.values():
             p.total_score = 0
             p.reset_for_new_round()
@@ -519,43 +537,37 @@ class Flip7RoundEndView(View):
         self.engine.deck = []
         self.engine.discard_pile = []
 
-        # 2. Start initial round of new match
         self.engine.start_round()
         game_view = Flip7GameView(self.session)
         self.session.current_view = game_view
         game_view.action_log = "🔄 New match started! Click **Hit** to draw your first card."
 
-        # 3. Edit the existing summary message into the fresh game view
-        await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
+        game_view.build_game_layout()
+        await interaction.response.edit_message(view=game_view)
 
         game_view.message = interaction.message
         self.session.message = interaction.message
 
         await game_view.start_turn_cycle()
 
-    @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, row=1, custom_id="btn_end_game_cancel")
-    async def cancel_button(self, interaction: discord.Interaction, button: Button):
+    async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.session.host.id:
             await interaction.response.send_message("Only the host can close the finished game session.", ephemeral=True)
             return
 
-        for child in self.children:
-            child.disabled = True
-
         winner = self.engine.get_winner()
         winner_text = f" **{winner.name}** won with **{winner.total_score} pts**." if winner else ""
         
-        embed = discord.Embed(
-            title="🏁 Game Session Closed",
-            description=f"The match has concluded.{winner_text} Thanks for playing!",
-            color=discord.Color.dark_grey()
-        )
-        await interaction.response.edit_message(embed=embed, view=self)
+        self.container.clear_items()
+        self.container.add_item(TextDisplay(f"# 🏁 Game Session Closed\nThe match has concluded.{winner_text} Thanks for playing!"))
+        await interaction.response.edit_message(view=self)
         self.session.stop()
 
+# --- LAYOUTVIEWS USING COMPONENTS V2 ---
 
-class Flip7LobbyView(View):
-    """Matchmaking lobby for players and bot opponents to gather before the game starts."""
+class Flip7LobbyView(LayoutView):
+    """Matchmaking lobby for players and bot opponents using LayoutView."""
+
     def __init__(self, session: GameSession):
         super().__init__(timeout=300)
         self.session = session
@@ -564,19 +576,40 @@ class Flip7LobbyView(View):
         self.target_score = session.target_score
         self.message: Optional[discord.Message] = None
         self.bot_index = 0
+        self.container = Container()
+        self.add_item(self.container)
 
-    def create_lobby_embed(self) -> discord.Embed:
-        embed = discord.Embed(
-            title="🃏 Flip 7 — Game Lobby",
-            description=(
-                f"**Host:** <@{self.host.id}>\n"
-                f"**Target Score:** `{self.target_score} pts`\n\n"
-                "Gather your friends! Click **Join** below to enter the table.\n"
-                "Need more players? Click **Add Bot** to fill seats.\n"
-                "When ready (2–8 players), the host can click **Start Game**!"
-            ),
-            color=discord.Color.purple()
+        # Instantiate buttons explicitly
+        self.btn_join = Button(label="Join 🎮", style=discord.ButtonStyle.success, custom_id="btn_lobby_join")
+        self.btn_leave = Button(label="Leave 🚪", style=discord.ButtonStyle.secondary, custom_id="btn_lobby_leave")
+        self.btn_add_bot = Button(label="Add Bot 🤖", style=discord.ButtonStyle.primary, custom_id="btn_lobby_add_bot")
+        self.btn_rem_bot = Button(label="Remove Bot 🚫", style=discord.ButtonStyle.secondary, custom_id="btn_lobby_remove_bot")
+        self.btn_start = Button(label="Start Game ▶️", style=discord.ButtonStyle.success, custom_id="btn_lobby_start")
+        self.btn_cancel = Button(label="Cancel ❌", style=discord.ButtonStyle.danger, custom_id="btn_lobby_cancel")
+
+        # Map callbacks to class methods
+        self.btn_join.callback = self.join_button_callback
+        self.btn_leave.callback = self.leave_button_callback
+        self.btn_add_bot.callback = self.add_bot_button_callback
+        self.btn_rem_bot.callback = self.remove_bot_button_callback
+        self.btn_start.callback = self.start_button_callback
+        self.btn_cancel.callback = self.cancel_button_callback
+
+        self.build_lobby_layout()
+
+    def build_lobby_layout(self):
+        self.container.clear_items()
+
+        header_text = (
+            f"# 🃏 Flip 7 — Game Lobby\n"
+            f"**Host:** <@{self.host.id}>\n"
+            f"**Target Score:** `{self.target_score} pts`\n\n"
+            "Gather your friends! Click **Join** below to enter the table.\n"
+            "Need more players? Click **Add Bot** to fill seats.\n"
+            "When ready (2–8 players), the host can click **Start Game**!"
         )
+        self.container.add_item(TextDisplay(header_text))
+        self.container.add_item(Separator())
 
         player_lines = []
         for i, p in enumerate(self.engine.players.values(), start=1):
@@ -587,17 +620,18 @@ class Flip7LobbyView(View):
             else:
                 player_lines.append(f"`{i}.` 🎮 **{p.name}**")
 
-        embed.add_field(
-            name=f"Players ({len(self.engine.players)}/8)",
-            value="\n".join(player_lines) if player_lines else "*Empty*",
-            inline=False
-        )
+        players_content = f"## Players ({len(self.engine.players)}/8)\n" + ("\n".join(player_lines) if player_lines else "*Empty*")
+        self.container.add_item(TextDisplay(players_content))
+        self.container.add_item(Separator())
+        self.container.add_item(TextDisplay("-# **Flip 7 is a press-your-luck card game. First to reach the target score wins!**"))
 
-        embed.set_footer(text="Flip 7 is a press-your-luck card game. First to reach the target score wins!")
-        return embed
+        # Append interactive ActionRows into the V2 container
+        row1 = ActionRow(self.btn_join, self.btn_leave, self.btn_add_bot, self.btn_rem_bot)
+        row2 = ActionRow(self.btn_start, self.btn_cancel)
+        self.container.add_item(row1)
+        self.container.add_item(row2)
 
-    @discord.ui.button(label="Join 🎮", style=discord.ButtonStyle.success, custom_id="btn_lobby_join")
-    async def join_button(self, interaction: discord.Interaction, button: Button):
+    async def join_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id in self.engine.players:
             await interaction.response.send_message("You are already in the lobby!", ephemeral=True)
             return
@@ -607,10 +641,10 @@ class Flip7LobbyView(View):
             return
 
         self.engine.add_player(interaction.user.id, interaction.user.display_name, is_bot=False)
-        await interaction.response.edit_message(embed=self.create_lobby_embed(), view=self)
+        self.build_lobby_layout()
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Leave 🚪", style=discord.ButtonStyle.secondary, custom_id="btn_lobby_leave")
-    async def leave_button(self, interaction: discord.Interaction, button: Button):
+    async def leave_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id not in self.engine.players:
             await interaction.response.send_message("You are not in the lobby.", ephemeral=True)
             return
@@ -620,10 +654,15 @@ class Flip7LobbyView(View):
             return
 
         self.engine.remove_player(interaction.user.id)
-        await interaction.response.edit_message(embed=self.create_lobby_embed(), view=self)
+        self.build_lobby_layout()
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Add Bot 🤖", style=discord.ButtonStyle.primary, custom_id="btn_lobby_add_bot")
-    async def add_bot_button(self, interaction: discord.Interaction, button: Button):
+    async def add_bot_button_callback(self, interaction: discord.Interaction):
+        # Ensure only the host can add bots
+        if interaction.user.id != self.host.id:
+            await interaction.response.send_message("Only the game host can add bots to the lobby.", ephemeral=True)
+            return
+
         if len(self.engine.players) >= 8:
             await interaction.response.send_message("The lobby is full (max 8 players).", ephemeral=True)
             return
@@ -633,20 +672,25 @@ class Flip7LobbyView(View):
         bot_id = 900000 + self.bot_index
 
         self.engine.add_player(bot_id, f"Bot {bot_name}", is_bot=True)
-        await interaction.response.edit_message(embed=self.create_lobby_embed(), view=self)
+        self.build_lobby_layout()
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Remove Bot 🚫", style=discord.ButtonStyle.secondary, custom_id="btn_lobby_remove_bot")
-    async def remove_bot_button(self, interaction: discord.Interaction, button: Button):
+    async def remove_bot_button_callback(self, interaction: discord.Interaction):
+        # Ensure only the host can remove bots
+        if interaction.user.id != self.host.id:
+            await interaction.response.send_message("Only the game host can remove bots from the lobby.", ephemeral=True)
+            return
+
         bot_keys = [uid for uid, p in self.engine.players.items() if p.is_bot]
         if not bot_keys:
             await interaction.response.send_message("There are no bots in the lobby to remove.", ephemeral=True)
             return
 
         self.engine.remove_player(bot_keys[-1])
-        await interaction.response.edit_message(embed=self.create_lobby_embed(), view=self)
+        self.build_lobby_layout()
+        await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label="Start Game ▶️", style=discord.ButtonStyle.success, row=1, custom_id="btn_lobby_start")
-    async def start_button(self, interaction: discord.Interaction, button: Button):
+    async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host.id:
             await interaction.response.send_message("Only the host can start the game.", ephemeral=True)
             return
@@ -661,23 +705,17 @@ class Flip7LobbyView(View):
         game_view.message = self.message
 
         game_view.action_log = "🎮 Game started! Click **Hit** to draw your first card."
+        game_view.build_game_layout()
 
-        await interaction.response.edit_message(embed=game_view.create_game_embed(), view=game_view)
+        await interaction.response.edit_message(view=game_view)
         await game_view.start_turn_cycle()
 
-    @discord.ui.button(label="Cancel ❌", style=discord.ButtonStyle.danger, row=1, custom_id="btn_lobby_cancel")
-    async def cancel_button(self, interaction: discord.Interaction, button: Button):
+    async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.session.host.id:
             await interaction.response.send_message("Only the host can cancel the game.", ephemeral=True)
             return
 
-        for child in self.children:
-            child.disabled = True
-
-        embed = discord.Embed(
-            title="🚫 Lobby Cancelled",
-            description=f"The lobby was cancelled by <@{self.host.id}>.",
-            color=discord.Color.red()
-        )
-        await interaction.response.edit_message(embed=embed, view=self)
+        self.container.clear_items()
+        self.container.add_item(TextDisplay(f"# 🚫 Lobby Cancelled\nThe lobby was cancelled by <@{self.host.id}>."))
+        await interaction.response.edit_message(view=self)
         self.session.stop()

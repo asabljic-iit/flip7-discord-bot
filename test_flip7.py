@@ -230,32 +230,40 @@ class TestFlip7Engine(unittest.TestCase):
 
     def test_game_session_and_views(self):
         from ui import GameSession, Flip7LobbyView, Flip7GameView, Flip7RoundEndView
-        
+        from discord.ui import TextDisplay
+
         class MockUser:
             id = 555
             name = "TestUser"
             display_name = "TestUser"
 
+        # 1. Test GameSession initialization
         session = GameSession(channel_id=123, host=MockUser(), target_score=100)
         self.assertEqual(len(session.engine.players), 1)
         self.assertEqual(session.engine.players[555].name, "TestUser")
 
+        # 2. Test Flip7LobbyView layout items
         lobby = Flip7LobbyView(session)
-        embed = lobby.create_lobby_embed()
-        self.assertIn("Flip 7", embed.title)
+        lobby_texts = [item.content for item in lobby.container.children if isinstance(item, TextDisplay)]
+        self.assertTrue(any("Flip 7 — Game Lobby" in text for text in lobby_texts))
 
+        # 3. Add bot and start round
         session.engine.add_player(999, "Bot Alex", is_bot=True)
         session.engine.start_round()
 
+        # 4. Test Flip7GameView layout items
         game_view = Flip7GameView(session)
-        g_embed = game_view.create_game_embed()
-        self.assertIn("Round 1", g_embed.title)
+        game_view.build_game_layout()
+        game_texts = [item.content for item in game_view.container.children if isinstance(item, TextDisplay)]
+        self.assertTrue(any("Round 1" in text for text in game_texts))
 
+        # 5. Test Flip7RoundEndView layout items
         scores = session.engine.tally_round_scores()
-        round_view = Flip7RoundEndView(session)
-        r_embed = round_view.create_summary_embed(scores)
-        self.assertIn("Round 1 Finished", r_embed.title)
+        round_view = Flip7RoundEndView(session, round_scores=scores)
+        summary_texts = [item.content for item in round_view.container.children if isinstance(item, TextDisplay)]
+        self.assertTrue(any("Round 1 Finished" in text for text in summary_texts))
 
+        # 6. Stop session
         session.stop()
         self.assertFalse(session.is_active)
 

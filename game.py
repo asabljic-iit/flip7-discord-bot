@@ -331,7 +331,7 @@ class Flip7Engine:
             raise ValueError("Target player is not active.")
 
         results: List[Tuple[Card, str]] = []
-        pending_actions_queue: List[str] = []
+        pending_actions_queue: List[Tuple[Card, str]] = []  # Stores (Card, action_type) tuples
 
         for _ in range(3):
             drawn_card = self._draw_card()
@@ -344,18 +344,18 @@ class Flip7Engine:
                 else:
                     eligible_targets = [p for p in self.players.values() if p.id != target_player.id and p.status == "playing" and not p.has_second_chance]
                     if eligible_targets:
-                        pending_actions_queue.append("pass_second_chance")
+                        pending_actions_queue.append((drawn_card, "pass_second_chance"))
                         results.append((drawn_card, "second_chance_passed_pending"))
                     else:
                         self.discard_pile.append(drawn_card)
                         results.append((drawn_card, "second_chance_discarded"))
 
             elif drawn_card.name == "Freeze":
-                pending_actions_queue.append("freeze")
+                pending_actions_queue.append((drawn_card, "freeze"))
                 results.append((drawn_card, "freeze_drawn"))
 
             elif drawn_card.name == "Flip Three":
-                pending_actions_queue.append("flip_three")
+                pending_actions_queue.append((drawn_card, "flip_three"))
                 results.append((drawn_card, "flip_three_drawn"))
 
             elif drawn_card.is_modifier:
@@ -390,22 +390,23 @@ class Flip7Engine:
                     else:
                         results.append((drawn_card, "safe"))
 
-        # Add all queued action cards to target player if they haven't busted
+        # Clean up queued action cards
         if target_player.status == "busted":
-            for act in pending_actions_queue:
-                if act != "pass_second_chance":
-                    self.discard_pile.append(Card("Freeze" if act == "freeze" else "Flip Three", "action"))
+            # Player busted: Discard all action cards drawn during Flip 3 that were not attached to hand
+            for card_obj, _ in pending_actions_queue:
+                self.discard_pile.append(card_obj)
         else:
-            target_player.pending_actions.extend(pending_actions_queue)
+            # Player survived: Add queued action types to pending_actions
+            for _, act_type in pending_actions_queue:
+                target_player.pending_actions.append(act_type)
 
         self.check_round_over()
         if advance_turn:
             self._advance_turn()
         return results
 
-    def resolve_pass_second_chance(self, actor_user_id: int, recipient_user_id: int) -> Player:
-        sc_card = Card("Second Chance", "action")
-        
+    def resolve_pass_second_chance(self, actor_user_id: int, recipient_user_id: int, card: Optional[Card] = None) -> Player:
+        """Resolves passing an excess Second Chance card to an eligible recipient."""
         actor = self.players.get(actor_user_id)
         if actor:
             actor.pending_action = None
@@ -413,8 +414,13 @@ class Flip7Engine:
         recipient = self.players.get(recipient_user_id)
         if not recipient or recipient.status != "playing":
             raise ValueError("Recipient is not active.")
+
+        # Use the passed card reference or create/find the Second Chance card
+        sc_card = card if card else Card("Second Chance", "action")
+
         recipient.has_second_chance = True
         recipient.hand.append(sc_card)
+
         self.check_round_over()
         self._advance_turn()
         return recipient

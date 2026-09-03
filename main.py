@@ -15,7 +15,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Channel-level game session tracking to avoid cross-channel interference
+# Channel-level game session tracking
 active_sessions: dict[int, GameSession] = {}  # channel_id -> GameSession
 
 
@@ -32,6 +32,8 @@ async def on_ready():
 
 
 @bot.tree.command(name="ping", description="Check bot latency.")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def ping(interaction: discord.Interaction):
     """Simple latency verification."""
     latency_ms = round(bot.latency * 1000)
@@ -40,6 +42,8 @@ async def ping(interaction: discord.Interaction):
 
 @bot.tree.command(name="flip7", description="Start a new multiplayer game of Flip 7 with friends!")
 @app_commands.describe(target_score="Points needed to win the match (default 200, or 100 for a quick match)")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def start_flip7(interaction: discord.Interaction, target_score: int = 200):
     """Spawns a matchmaking lobby where friends can join, add bots, and start."""
     channel_id = interaction.channel_id
@@ -70,6 +74,8 @@ async def start_flip7(interaction: discord.Interaction, target_score: int = 200)
 
 
 @bot.tree.command(name="flip7_stop", description="Cancel the ongoing Flip 7 game or lobby in this channel.")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def stop_flip7(interaction: discord.Interaction):
     """Stops the active game in the channel."""
     channel_id = interaction.channel_id
@@ -79,7 +85,7 @@ async def stop_flip7(interaction: discord.Interaction):
         await interaction.response.send_message("There is no active Flip 7 game in this channel to stop.", ephemeral=True)
         return
 
-    # Check permissions: Host or Manage Messages
+    # Check permissions: Host or Manage Messages (if inside a server guild)
     is_host = session.host.id == interaction.user.id
     has_perm = interaction.user.guild_permissions.manage_messages if interaction.guild else True
 
@@ -99,6 +105,8 @@ async def stop_flip7(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="flip7_rules", description="Learn how to play Flip 7 (rules, cards, and scoring).")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def flip7_rules(interaction: discord.Interaction):
     """Displays comprehensive rules and card breakdown."""
     embed = discord.Embed(

@@ -28,7 +28,7 @@ A Discord app for playing the press-your-luck card game **Flip 7** with your fri
 
 ## Discord Invite Link
 
-If you want to invite/install the bot to your server, [visit this link](https://discord.com/oauth2/authorize?client_id=1544796864690397184&permissions=0&integration_type=0&scope=applications.commands+bot). To install it as a user app, [visit this link](https://discord.com/oauth2/authorize?client_id=1544796864690397184). This bot is hosted by me and may not always be up. For instructions on how to self-host, read below.
+If you want to invite/install the bot to your server, [visit this link](https://discord.com/oauth2/authorize?client_id=1544796864690397184). This bot is hosted by me and may not always be up. For instructions on how to self-host, read below.
 
 ## Self-Hosting
 

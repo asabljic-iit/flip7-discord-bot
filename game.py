@@ -23,18 +23,18 @@ class Card:
     def format_card(self) -> str:
         """Returns clean formatted string with emoji for Discord embeds."""
         if self.is_number:
-            return f"`[{self.value}]`"
+            return f"`{self.value}`"
         if self.name == "x2":
-            return "`[✖️ x2]`"
+            return "`×2`"
         if self.is_modifier:
-            return f"`[➕ +{self.value}]`"
+            return f"`+{self.value}`"
         if self.name == "Second Chance":
-            return "`[❤️ 2nd Chance]`"
+            return "`❤️ 2nd Chance`"
         if self.name == "Freeze":
-            return "`[❄️ Freeze]`"
+            return "`❄️ Freeze`"
         if self.name == "Flip Three":
-            return "`[⚡️ Flip 3]`"
-        return f"`[{self.name}]`"
+            return "`⚡️ Flip 3`"
+        return f"`{self.name}`"
 
     def __repr__(self) -> str:
         return self.name

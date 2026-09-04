@@ -31,15 +31,6 @@ async def on_ready():
         print(f"Failed to sync slash commands: {e}")
 
 
-@bot.tree.command(name="ping", description="Check bot latency.")
-@app_commands.allowed_installs(guilds=True, users=True)
-@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-async def ping(interaction: discord.Interaction):
-    """Simple latency verification."""
-    latency_ms = round(bot.latency * 1000)
-    await interaction.response.send_message(f"Pong! 🏓 Latency: `{latency_ms}ms`")
-
-
 @bot.tree.command(name="flip7", description="Start a new multiplayer game of Flip 7 with friends!")
 @app_commands.describe(target_score="Points needed to win the match (default 200, or 100 for a quick match)")
 @app_commands.allowed_installs(guilds=True, users=True)

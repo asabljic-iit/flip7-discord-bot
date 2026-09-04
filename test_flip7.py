@@ -237,21 +237,21 @@ class TestFlip7Engine(unittest.TestCase):
             name = "TestUser"
             display_name = "TestUser"
 
-        # 1. Test GameSession initialization
+        # Test GameSession initialization
         session = GameSession(channel_id=123, host=MockUser(), target_score=100)
         self.assertEqual(len(session.engine.players), 1)
         self.assertEqual(session.engine.players[555].name, "TestUser")
 
-        # 2. Test Flip7LobbyView layout items
+        # Test Flip7LobbyView layout items
         lobby = Flip7LobbyView(session)
         lobby_texts = [item.content for item in lobby.container.children if isinstance(item, TextDisplay)]
         self.assertTrue(any("Flip 7 — Game Lobby" in text for text in lobby_texts))
 
-        # 3. Add bot and start round
+        # Add bot and start round
         session.engine.add_player(999, "Bot Alex", is_bot=True)
         session.engine.start_round()
 
-        # 4. Test Flip7GameView layout items
+        # Test Flip7GameView layout items
         game_view = Flip7GameView(session)
         game_view.build_game_layout()
         game_texts = [item.content for item in game_view.container.children if isinstance(item, TextDisplay)]

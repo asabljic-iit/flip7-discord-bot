@@ -229,13 +229,13 @@ class Flip7GameView(LayoutView):
             numbers = [c for c in p.hand if c.is_number]
             others = [c for c in p.hand if not c.is_number]
 
-            numbers_str = " ".join(c.format_card() for c in numbers) if numbers else "*None*"
-            others_str = " ".join(c.format_card() for c in others) if others else "*None*"
+            numbers_str = " ".join(c.format_card() for c in numbers) if numbers else " "
+            others_str = " ".join(c.format_card() for c in others) if others else " "
 
             player_text = (
                 f"👤 **{p.name}{shield_badge}  —  {status_badge}**\n"
                 f"**Banked Total:** `{p.total_score} pts`  |  **Round Score:** `{p.get_round_score()} pts`\n"
-                f"## **Hand:** {numbers_str}\n"
+                f"# **Hand:** {numbers_str}\n"
                 f"**{others_str}**"
             )
             self.container.add_item(TextDisplay(player_text))
@@ -285,14 +285,14 @@ class Flip7GameView(LayoutView):
 
             await asyncio.sleep(1.2)
 
-            # 1. Resolve any pending actions for this bot
+            # Resolve any pending actions for this bot
             while curr.pending_action and curr.status == "playing":
                 await self._resolve_bot_pending_action(curr)
 
             if self.engine.is_round_over() or curr.status != "playing":
                 break
 
-            # 2. Make hit / stay decision
+            # Make hit / stay decision
             decision = self.engine.get_bot_decision(curr)
             if decision == "hit":
                 card, result, extra = self.engine.hit(curr.id)

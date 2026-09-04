@@ -441,12 +441,19 @@ class Flip7GameView(LayoutView):
         round_scores = self.engine.tally_round_scores()
         round_view = Flip7RoundEndView(self.session, round_scores)
         self.session.current_view = round_view
-        
+
         channel = self.message.channel if self.message else None
         if channel:
-            new_msg = await channel.send(view=round_view)
-            round_view.message = new_msg
-            self.session.message = new_msg
+            try:
+                new_msg = await channel.send(view=round_view)
+                round_view.message = new_msg
+                self.session.message = new_msg
+            except discord.Forbidden:
+                # Fallback if channel.send fails due to missing permissions:
+                # Display the end-of-round recap on the existing view directly
+                round_view.build_summary_layout()
+                if self.message:
+                    await self.message.edit(view=round_view)
 
 
 class Flip7RoundEndView(LayoutView):

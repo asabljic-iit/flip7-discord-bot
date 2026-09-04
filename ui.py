@@ -263,28 +263,25 @@ class Flip7GameView(LayoutView):
         self.update_buttons()
         self.build_game_layout()
 
-        # Update message using interaction followup or direct message edit
-        if interaction and interaction.message:
-            try:
-                await interaction.followup.edit_message(interaction.message.id, view=self)
-            except Exception:
-                pass
-        elif self.message:
+        # Safely update the active message
+        if self.message:
             try:
                 await self.message.edit(view=self)
             except discord.Forbidden:
                 pass
+            except Exception:
+                pass
 
         # If it's a bot's turn, launch a single task loop to process all consecutive bot turns
         if curr.is_bot:
-            asyncio.create_task(self._process_bot_turn(interaction=interaction))
+            asyncio.create_task(self._process_bot_turn())
 
     def _cancel_timer(self):
         if self.turn_timer_task and not self.turn_timer_task.done():
             self.turn_timer_task.cancel()
             self.turn_timer_task = None
 
-    async def _process_bot_turn(self, interaction: Optional[discord.Interaction] = None):
+    async def _process_bot_turn(self):
         """Iterative loop that processes active bot turns sequentially without recursive tasks."""
         while not self.engine.is_round_over():
             curr = self.engine.get_current_player()
@@ -341,32 +338,22 @@ class Flip7GameView(LayoutView):
             self.update_buttons()
             self.build_game_layout()
             
-            if interaction and interaction.message:
-                try:
-                    await interaction.followup.edit_message(interaction.message.id, view=self)
-                except Exception:
-                    pass
-            elif self.message:
+            if self.message:
                 try:
                     await self.message.edit(view=self)
-                except discord.Forbidden:
+                except (discord.Forbidden, Exception):
                     pass
 
         # Check if the round ended or hand off control to human player
         if self.engine.is_round_over():
-            await self.finish_round(interaction=interaction)
+            await self.finish_round()
         else:
             self.update_buttons()
             self.build_game_layout()
-            if interaction and interaction.message:
-                try:
-                    await interaction.followup.edit_message(interaction.message.id, view=self)
-                except Exception:
-                    pass
-            elif self.message:
+            if self.message:
                 try:
                     await self.message.edit(view=self)
-                except discord.Forbidden:
+                except (discord.Forbidden, Exception):
                     pass
 
     async def _resolve_bot_pending_action(self, bot_player: Player):
@@ -451,41 +438,35 @@ class Flip7GameView(LayoutView):
         await self.start_turn_cycle(interaction=interaction)
 
     async def finish_round(self, interaction: Optional[discord.Interaction] = None):
-        """Called when a round ends. Posts a recap with Next Round controls, falling back to editing on Forbidden errors."""
+        """Called when a round ends. Converts current game board to recap view."""
         self._cancel_timer()
         self._clear_selects()
+
+        # Disable buttons on current round view
+        self.hit_btn.disabled = True
+        self.stay_btn.disabled = True
 
         round_scores = self.engine.tally_round_scores()
         round_view = Flip7RoundEndView(self.session, round_scores)
         self.session.current_view = round_view
         round_view.build_summary_layout()
 
-        # Update via active interaction followup first if present
-        if interaction and interaction.message:
+        # Edit the interaction response if available
+        if interaction and not interaction.response.is_done():
             try:
-                await interaction.followup.edit_message(interaction.message.id, view=round_view)
-                round_view.message = interaction.message
-                self.session.message = interaction.message
+                await interaction.response.edit_message(view=round_view)
+                round_view.message = self.message
                 return
             except Exception:
                 pass
 
-        channel = self.message.channel if self.message else None
-        if channel:
+        # Otherwise edit self.message
+        if self.message:
             try:
-                # Try sending as a fresh message first
-                new_msg = await channel.send(view=round_view)
-                round_view.message = new_msg
-                self.session.message = new_msg
-            except discord.Forbidden:
-                # Fallback for DMs where proactive send is forbidden
-                if self.message:
-                    try:
-                        await self.message.edit(view=round_view)
-                    except discord.Forbidden:
-                        pass
-                    round_view.message = self.message
-                    self.session.message = self.message
+                await self.message.edit(view=round_view)
+                round_view.message = self.message
+            except Exception:
+                pass
 
 
 class Flip7RoundEndView(LayoutView):
@@ -555,18 +536,26 @@ class Flip7RoundEndView(LayoutView):
             await interaction.response.send_message("The game is already finished! Click 'Play Again' to restart.", ephemeral=True)
             return
 
+        # Disable buttons on the recap view
+        self.btn_next.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        # Initialize the next round
         self.engine.start_round()
         game_view = Flip7GameView(self.session)
         self.session.current_view = game_view
         game_view.action_log = f"🎮 Round {self.engine.round_number} started! Click **Hit** to draw your first card."
-
         game_view.build_game_layout()
-        await interaction.response.edit_message(view=game_view)
-        
-        game_view.message = interaction.message
-        self.session.message = interaction.message
 
-        await game_view.start_turn_cycle(interaction=interaction)
+        # Send a brand-new message in response to the button click interaction
+        new_msg = await interaction.followup.send(view=game_view, wait=True)
+        
+        # Link session and view to the new message
+        game_view.message = new_msg
+        self.session.message = new_msg
+
+        # Start processing turns for the new round
+        await game_view.start_turn_cycle()
 
     async def play_again_button_callback(self, interaction: discord.Interaction):
         for p in self.engine.players.values():
@@ -576,18 +565,23 @@ class Flip7RoundEndView(LayoutView):
         self.engine.deck = []
         self.engine.discard_pile = []
 
+        # Disable buttons on recap
+        self.btn_play_again.disabled = True
+        self.btn_cancel.disabled = True
+        await interaction.response.edit_message(view=self)
+
         self.engine.start_round()
         game_view = Flip7GameView(self.session)
         self.session.current_view = game_view
         game_view.action_log = "🔄 New match started! Click **Hit** to draw your first card."
-
         game_view.build_game_layout()
-        await interaction.response.edit_message(view=game_view)
 
-        game_view.message = interaction.message
-        self.session.message = interaction.message
+        new_msg = await interaction.followup.send(view=game_view, wait=True)
 
-        await game_view.start_turn_cycle(interaction=interaction)
+        game_view.message = new_msg
+        self.session.message = new_msg
+
+        await game_view.start_turn_cycle()
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.session.host.id:
@@ -596,6 +590,7 @@ class Flip7RoundEndView(LayoutView):
         
         await interaction.response.send_message("🏁 The match has concluded. Thanks for playing!")
         self.session.stop()
+
 
 # --- LAYOUTVIEWS USING COMPONENTS V2 ---
 
@@ -742,7 +737,7 @@ class Flip7LobbyView(LayoutView):
         game_view.build_game_layout()
 
         await interaction.response.edit_message(view=game_view)
-        await game_view.start_turn_cycle(interaction=interaction)
+        await game_view.start_turn_cycle()
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.session.host.id:

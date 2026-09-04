@@ -1,22 +1,20 @@
+import json
 import os
 import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
-from ui import Flip7LobbyView, GameSession
+from session import GameSession, active_sessions, SAVES_DIR
+from ui import Flip7LobbyView, Flip7GameView
+from engine import Flip7Engine
 
-# Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# Channel-level game session tracking
-active_sessions: dict[int, GameSession] = {}  # channel_id -> GameSession
 
 
 @bot.event
@@ -24,6 +22,52 @@ async def on_ready():
     """Triggered when the bot is connected and ready."""
     print(f"Logged in as {bot.user.name} (ID: {bot.user.id})")
     print("------")
+    
+    # Restore saved games on startup
+    if os.path.exists(SAVES_DIR):
+        for filename in os.listdir(SAVES_DIR):
+            if filename.startswith("game_") and filename.endswith(".json"):
+                file_path = os.path.join(SAVES_DIR, filename)
+                try:
+                    with open(file_path, "r") as f:
+                        data = json.load(f)
+
+                    channel_id = data["channel_id"]
+                    host_id = data["host_id"]
+                    
+                    host_user = await bot.fetch_user(host_id)
+                    
+                    session = GameSession(channel_id, host_user, target_score=data["target_score"])
+                    session.engine = Flip7Engine.from_dict(data["engine"])
+                    
+                    game_view = Flip7GameView(session)
+                    session.current_view = game_view
+                    
+                    try:
+                        channel = await bot.fetch_channel(channel_id)
+                        if data.get("message_id"):
+                            msg = await channel.fetch_message(data["message_id"])
+                            session.message = msg
+                            game_view.message = msg
+                            
+                            # Bind view persistent handlers with discord.py bot engine
+                            bot.add_view(game_view, message_id=msg.id)
+                            
+                            # Re-build layout structure so interactive elements mount properly
+                            game_view.build_game_layout()
+                            await msg.edit(view=game_view)
+                    except Exception as e:
+                        print(f"Could not re-attach message for session in {channel_id}: {e}")
+
+                    active_sessions[channel_id] = session
+                    
+                    # Auto-resume turn processing (handles bots or turn state restoration)
+                    await game_view.start_turn_cycle()
+                    print(f"✅ Restored active Flip 7 game in channel {channel_id}.")
+                    
+                except Exception as e:
+                    print(f"❌ Failed to restore save file {filename}: {e}")
+
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} slash command(s).")
@@ -39,7 +83,6 @@ async def start_flip7(interaction: discord.Interaction, target_score: int = 200)
     """Spawns a matchmaking lobby where friends can join, add bots, and start."""
     channel_id = interaction.channel_id
 
-    # Check if an active session is running in this channel
     session = active_sessions.get(channel_id)
     if session and session.is_active:
         await interaction.response.send_message(
@@ -58,7 +101,6 @@ async def start_flip7(interaction: discord.Interaction, target_score: int = 200)
     new_session.current_view = lobby
     active_sessions[channel_id] = new_session
 
-    # Send the LayoutView directly
     await interaction.response.send_message(view=lobby)
     new_session.message = await interaction.original_response()
     lobby.message = new_session.message
@@ -76,7 +118,6 @@ async def stop_flip7(interaction: discord.Interaction):
         await interaction.response.send_message("There is no active Flip 7 game in this channel to stop.", ephemeral=True)
         return
 
-    # Check permissions: Host or Manage Messages (if inside a server guild)
     is_host = session.host.id == interaction.user.id
     has_perm = interaction.user.guild_permissions.manage_messages if interaction.guild else True
 
@@ -85,7 +126,8 @@ async def stop_flip7(interaction: discord.Interaction):
         return
 
     session.stop()
-    del active_sessions[channel_id]
+    if channel_id in active_sessions:
+        del active_sessions[channel_id]
 
     await interaction.response.send_message(f"🛑 The active Flip 7 game was stopped by <@{interaction.user.id}>.")
 
@@ -122,8 +164,8 @@ async def flip7_rules(interaction: discord.Interaction):
             "• `[🛡️ Second Chance]` Shields you from your next duplicate bust! Max 1 shield held at a time. Extra copies must be passed.\n"
             "• `[❄️ Freeze]` Forces a player (yourself or an opponent) to immediately stay and bank their current points.\n"
             "• `[⚡️ Flip Three]` Forces the target player to immediately flip the next 3 cards from the deck!\n"
-            "• `[➕ +2 to +10]` Flat point bonus added to your round score.\n"
-            "• `[✖️ x2]` Doubles the sum of your number cards!"
+            "• `[+2 to +10]` Flat point bonus added to your round score.\n"
+            "• `[×2]` Doubles the sum of your number cards!"
         ),
         inline=False
     )
@@ -139,12 +181,25 @@ async def flip7_rules(interaction: discord.Interaction):
 
     embed.add_field(
         name="🧮 Scoring Formula",
-        value="`Round Score = (Sum of Numbers × 2 if x2) + Flat Modifiers + 15 (if Flip 7)`",
+        value="`Round Score = (Sum of Numbers × 2 if ×2) + Flat Modifiers + 15 (if Flip 7)`",
         inline=False
     )
 
     embed.set_footer(text="Start a game anytime with /flip7!")
     await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error.original, discord.NotFound):
+        print("Interaction expired before response could be delivered (network timeout).")
+        return
+
+    if isinstance(error.original, (discord.HTTPException, OSError)):
+        print(f"Network error during command execution: {error.original}")
+        return
+
+    print(f"Unhandled command error: {error}")
 
 
 if __name__ == "__main__":

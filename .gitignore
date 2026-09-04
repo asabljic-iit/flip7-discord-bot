@@ -2,6 +2,7 @@
 venv/
 .venv/
 node_modules/
+game_saves/
 
 # Secrets & Environment variables
 .env

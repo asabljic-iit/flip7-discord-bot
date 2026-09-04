@@ -1,5 +1,6 @@
 import unittest
-from game import Card, Player, Flip7Engine, build_flip7_deck
+from models import Card, Player, build_flip7_deck
+from engine import Flip7Engine
 
 class TestFlip7Engine(unittest.TestCase):
 

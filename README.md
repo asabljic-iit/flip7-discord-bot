@@ -21,7 +21,6 @@ A Discord app for playing the press-your-luck card game **Flip 7** with your fri
     - Multiplier: `[x2]` (doubles the sum of number cards).
 - **The Flip 7 Bonus (+15 pts)**: Flipping 7 unique number cards (including `0`) triggers **FLIP 7** (+15 points) and ends the round immediately for all players!
 - **Multi-Round Matches**: Bank points across rounds until someone reaches the target score (default 200 points, configurable).
-- **AFK Protection**: 45-second turn timer automatically stays inactive players so the game never stalls.
 - **Channel Isolation**: Multiple channels and servers can run their own matches simultaneously without cross-talk.
 
 ---
@@ -70,7 +69,6 @@ python3 main.py
 | `/flip7 [optional_target_score]` | Starts a game lobby in the current channel (default goal: 200 points). |
 | `/flip7_rules` | Displays the complete rulebook, card guide, and scoring formula. |
 | `/flip7_stop` | Cancels the active game or lobby in the channel (host or moderator only). |
-| `/ping` | Checks bot latency. |
 
 ---
 

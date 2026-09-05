@@ -1,6 +1,6 @@
 import unittest
-from models import Card, Player, build_flip7_deck
-from engine import Flip7Engine
+from game.models import Card, Player, build_flip7_deck
+from game.engine import Flip7Engine
 
 class TestFlip7Engine(unittest.TestCase):
 
@@ -230,7 +230,7 @@ class TestFlip7Engine(unittest.TestCase):
         self.assertEqual(len(engine.deck), 1)
 
     def test_game_session_and_views(self):
-        from ui import GameSession, Flip7LobbyView, Flip7GameView, Flip7RoundEndView
+        from game.ui import GameSession, Flip7LobbyView, Flip7GameView, Flip7RoundEndView
         from discord.ui import TextDisplay
 
         class MockUser:

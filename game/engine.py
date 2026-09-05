@@ -1,6 +1,6 @@
 import random
 from typing import List, Dict, Tuple, Optional
-from models import Card, Player, build_flip7_deck
+from game.models import Card, Player, build_flip7_deck
 
 class Flip7Engine:
     def __init__(self, target_score: int = 200):

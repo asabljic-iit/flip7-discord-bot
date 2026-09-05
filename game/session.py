@@ -6,7 +6,7 @@ import discord
 from discord.ui import LayoutView
 from aiohttp.client_exceptions import ClientConnectorError
 from typing import Optional, Dict
-from engine import Flip7Engine
+from game.engine import Flip7Engine
 
 SAVES_DIR = "./game_saves"
 os.makedirs(SAVES_DIR, exist_ok=True)

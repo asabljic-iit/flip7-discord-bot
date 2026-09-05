@@ -2,8 +2,8 @@ import asyncio
 import discord
 from discord.ui import LayoutView, Container, TextDisplay, Separator, Button, Select, ActionRow
 from typing import Optional, List, Dict
-from models import Player
-from session import GameSession, auto_retry, safe_interaction_defer
+from game.models import Player
+from game.session import GameSession, auto_retry, safe_interaction_defer
 
 BOT_NAMES = ["Alex", "Chloe", "Sam", "Leo", "Maya", "Jordan"]
 

@@ -4,9 +4,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
-from session import GameSession, active_sessions, SAVES_DIR
-from ui import Flip7LobbyView, Flip7GameView
-from engine import Flip7Engine
+from game.session import GameSession, active_sessions, SAVES_DIR
+from game.ui import Flip7LobbyView, Flip7GameView
+from game.engine import Flip7Engine
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")

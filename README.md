@@ -11,7 +11,7 @@ A Discord app for playing the press-your-luck card game **Flip 7** with your fri
 - **Multiplayer Matchmaking Lobby**: Gather 2 to 8 friends in any text channel using interactive buttons (**Join**, **Leave**, **Add Bot**, **Start Game**).
 - **AI Bot Opponents**: Add AI bots to fill empty seats or test the game solo. Bots calculate duplicate risk and make smart press-your-luck choices!
 - **Authentic 94-Card Deck**:
-  - **Number Cards (0–12)**: 1x `0`, 1x `1`, 2x `2`, ..., 12x `12` (79 number cards total).
+  - **Number Cards (0–12)**: 1x `0`, 1x `1`, 2x `2`, ..., 12x `12` (79 number cards).
   - **Action Cards**:
     - `[❤️ Second Chance]` (3x): Shields against your next duplicate number bust. Max 1 held; excess copies are passed to active opponents.
     - `[❄️ Freeze]` (3x): Choose a player (opponent or self) to immediately stay and bank their current points.

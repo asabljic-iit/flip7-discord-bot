@@ -7,7 +7,6 @@ def clean_clone_setup_and_run(repo_url: str, target_dir: str, token_key: str, to
     """Deletes the target directory if it exists, initializes it fresh, adds token, and runs main.py."""
     folder = Path(target_dir).resolve()
     
-    # --- STEP 1: Check and Delete Existing Directory ---
     if folder.exists():
         print(f"Directory '{folder}' already exists. Deleting it for a clean setup...")
         try:
@@ -22,7 +21,6 @@ def clean_clone_setup_and_run(repo_url: str, target_dir: str, token_key: str, to
     folder.mkdir(parents=True, exist_ok=True)
 
     try:
-        # --- STEP 2: Initialize Git and Pull Repository ---
         print("Initializing blank local repository...")
         subprocess.run(["git", "init"], cwd=folder, check=True, capture_output=True)
 
@@ -33,16 +31,13 @@ def clean_clone_setup_and_run(repo_url: str, target_dir: str, token_key: str, to
         subprocess.run(["git", "pull", "origin", branch], cwd=folder, check=True, capture_output=True)
         print("Git repository pulled successfully!")
 
-        # --- STEP 3: Create and Write the .env File ---
         env_path = folder / ".env"
         env_path.write_text(f"{token_key}={token_value}\n")
         print(f"Successfully saved {token_key} to {env_path.name}")
 
-        # --- STEP 4: Run main.py ---
         main_script_path = folder / "main.py"
         if main_script_path.exists():
             print(f"Launching {main_script_path.name}...")
-            # cwd=folder ensures the bot reads the local .env file we just created
             subprocess.run([sys.executable, str(main_script_path)], cwd=folder, check=True)
         else:
             print(f"Error: Could not find '{main_script_path.name}' in the repository.")
@@ -51,7 +46,7 @@ def clean_clone_setup_and_run(repo_url: str, target_dir: str, token_key: str, to
         print("An error occurred during execution:")
         print(e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr)
 
-# Configuration based on your Flip 7 repository
+# Configuration
 github_url = "https://github.com/asabljic-iit/flip7-discord-bot.git"
 target_folder = "./flip7-discord-bot"
 bot_token = "token_here" # Replace with your token

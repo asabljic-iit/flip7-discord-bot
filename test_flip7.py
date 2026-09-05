@@ -258,13 +258,13 @@ class TestFlip7Engine(unittest.TestCase):
         game_texts = [item.content for item in game_view.container.children if isinstance(item, TextDisplay)]
         self.assertTrue(any("Round 1" in text for text in game_texts))
 
-        # 5. Test Flip7RoundEndView layout items
+        # Test Flip7RoundEndView layout items
         scores = session.engine.tally_round_scores()
         round_view = Flip7RoundEndView(session, round_scores=scores)
         summary_texts = [item.content for item in round_view.container.children if isinstance(item, TextDisplay)]
         self.assertTrue(any("Round 1 Finished" in text for text in summary_texts))
 
-        # 6. Stop session
+        # Stop session
         session.stop()
         self.assertFalse(session.is_active)
 

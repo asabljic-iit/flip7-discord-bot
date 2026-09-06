@@ -26,34 +26,34 @@ class Flip7Engine:
                 self.player_order.remove(user_id)
 
     def _draw_card(self) -> Card:
+        """Draws a card. Shuffles discard pile into draw deck ONLY when draw deck is empty."""
         if not self.deck:
             if self.discard_pile:
                 self.deck = self.discard_pile
                 self.discard_pile = []
                 random.shuffle(self.deck)
             else:
+                # Emergency fallback: If both deck & discard are empty (all 94 cards in hands),
+                # build a fresh 94-card deck as a safeguard.
                 self.deck = build_flip7_deck()
                 random.shuffle(self.deck)
         return self.deck.pop()
 
     def start_round(self):
-        """Resets hands/statuses and prepares the deck for a new round."""
+        """Resets player states and prepares for a new round without resetting existing decks."""
         self.round_number += 1
         self.flip7_achieved_by = None
 
-        total_available = len(self.deck) + len(self.discard_pile)
-        if total_available < len(self.player_order) * 4 and total_available >= 90:
-            all_cards = self.deck + self.discard_pile
-            self.deck = all_cards
-            self.discard_pile = []
-            random.shuffle(self.deck)
-        elif not self.deck and not self.discard_pile:
-            self.deck = build_flip7_deck()
-            random.shuffle(self.deck)
-
+        # Reset hands and statuses for all players
         for player in self.players.values():
             player.reset_for_new_round()
 
+        # If starting game for the first time and deck is completely uninitialized
+        if not self.deck and not self.discard_pile:
+            self.deck = build_flip7_deck()
+            random.shuffle(self.deck)
+
+        # Rotate first player/dealer order
         if self.round_number > 1 and len(self.player_order) > 1:
             first = self.player_order.pop(0)
             self.player_order.append(first)

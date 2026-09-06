@@ -132,7 +132,7 @@ class Flip7Engine:
                 return drawn_card, "saved_by_second_chance", None
             else:
                 player.status = "busted"
-                self.discard_pile.extend(player.hand)
+                # self.discard_pile.extend(player.hand)
                 self.check_round_over()
                 self._advance_turn()
                 return drawn_card, "busted", None
@@ -236,7 +236,7 @@ class Flip7Engine:
                         results.append((drawn_card, "saved_by_second_chance"))
                     else:
                         target_player.status = "busted"
-                        self.discard_pile.extend(target_player.hand)
+                        # self.discard_pile.extend(target_player.hand)
                         results.append((drawn_card, "busted"))
                         break
                 else:

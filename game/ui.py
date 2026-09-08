@@ -603,9 +603,9 @@ class Flip7RoundEndView(LayoutView):
             await interaction.response.edit_message(view=self)
         except Exception:
             pass
-        
+
         try:
-            await interaction.response.send_message("🏁 The match has concluded. Thanks for playing!")
+            await interaction.followup.send("🏁 The match has concluded. Thanks for playing!")
         except Exception:
             pass
         self.session.stop()

@@ -475,7 +475,7 @@ class Flip7RoundEndView(LayoutView):
 
         self.btn_next = Button(label="Next Round ⏭️", style=discord.ButtonStyle.primary, custom_id="btn_next_round")
         self.btn_play_again = Button(label="Play Again 🔄", style=discord.ButtonStyle.success, custom_id="btn_play_again")
-        self.btn_cancel = Button(label="Cancel ⏹️", style=discord.ButtonStyle.danger, custom_id="btn_end_game_cancel")
+        self.btn_cancel = Button(label="Quit ⏹️", style=discord.ButtonStyle.danger, custom_id="btn_end_game_cancel")
 
         self.btn_next.callback = self.next_round_button_callback
         self.btn_play_again.callback = self.play_again_button_callback
@@ -525,6 +525,10 @@ class Flip7RoundEndView(LayoutView):
             self.container.add_item(ActionRow(self.btn_play_again, self.btn_cancel))
 
     async def next_round_button_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.session.host.id:
+            await interaction.response.send_message("Only the host can start the next round.", ephemeral=True)
+            return
+        
         if self.engine.is_game_over():
             try:
                 await interaction.response.send_message("The game is already finished! Click 'Play Again' to restart.", ephemeral=True)
@@ -553,6 +557,10 @@ class Flip7RoundEndView(LayoutView):
         await game_view.start_turn_cycle()
 
     async def play_again_button_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.session.host.id:
+            await interaction.response.send_message("Only the host can start a new game.", ephemeral=True)
+            return
+        
         for p in self.engine.players.values():
             p.total_score = 0
             p.reset_for_new_round()
@@ -591,6 +599,8 @@ class Flip7RoundEndView(LayoutView):
         
         try:
             await interaction.response.send_message("🏁 The match has concluded. Thanks for playing!")
+            self.btn_play_again.disabled = True
+            self.btn_cancel.disabled = True
         except Exception:
             pass
         self.session.stop()
@@ -617,7 +627,7 @@ class Flip7LobbyView(LayoutView):
         self.btn_add_bot = Button(label="Add Bot 🤖", style=discord.ButtonStyle.primary, custom_id="btn_lobby_add_bot")
         self.btn_rem_bot = Button(label="Remove Bot 🚫", style=discord.ButtonStyle.secondary, custom_id="btn_lobby_remove_bot")
         self.btn_start = Button(label="Start Game ▶️", style=discord.ButtonStyle.success, custom_id="btn_lobby_start")
-        self.btn_cancel = Button(label="Cancel ⏹️", style=discord.ButtonStyle.danger, custom_id="btn_lobby_cancel")
+        self.btn_cancel = Button(label="Quit ⏹️", style=discord.ButtonStyle.danger, custom_id="btn_lobby_cancel")
 
         self.btn_join.callback = self.join_button_callback
         self.btn_leave.callback = self.leave_button_callback

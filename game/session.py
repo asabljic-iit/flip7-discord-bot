@@ -68,6 +68,10 @@ class GameSession:
         """Saves current session state to a JSON file."""
         if not self.is_active:
             return
+
+        if self.engine.is_game_over():
+            self.delete_saved_state()
+            return
             
         file_path = os.path.join(SAVES_DIR, f"game_{self.channel_id}.json")
         data = {

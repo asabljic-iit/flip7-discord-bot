@@ -600,6 +600,11 @@ class Flip7RoundEndView(LayoutView):
         self.btn_play_again.disabled = True
         self.btn_cancel.disabled = True
         try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            pass
+        
+        try:
             await interaction.response.send_message("🏁 The match has concluded. Thanks for playing!")
         except Exception:
             pass

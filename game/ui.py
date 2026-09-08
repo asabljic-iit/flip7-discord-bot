@@ -596,11 +596,11 @@ class Flip7RoundEndView(LayoutView):
             except Exception:
                 pass
             return
-        
+
+        self.btn_play_again.disabled = True
+        self.btn_cancel.disabled = True
         try:
             await interaction.response.send_message("🏁 The match has concluded. Thanks for playing!")
-            self.btn_play_again.disabled = True
-            self.btn_cancel.disabled = True
         except Exception:
             pass
         self.session.stop()
